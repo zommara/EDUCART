@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#08120f" />
+  <title>Surface — iOS AR Experience</title>
+
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #07110e;
+      --panel: rgba(13, 31, 26, .72);
+      --line: rgba(220, 255, 232, .13);
+      --text: #f4fff8;
+      --muted: #aac1b4;
+      --lime: #c7ff58;
+      --lime-dark: #89b830;
+      --shadow: 0 20px 65px rgba(0, 0, 0, .42);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      font: inherit;
+      cursor: pointer;
+      color: inherit;
+    }
+
+    .app {
+      position: relative;
+      width: 100%;
+      height: 100dvh;
+      min-height: 650px;
+      overflow: hidden;
+      isolation: isolate;
+      background:
+        radial-gradient(circle at 76% 20%, rgba(158, 255, 90, .15), transparent 25%),
+        radial-gradient(circle at 15% 80%, rgba(63, 151, 112, .14), transparent 32%),
+        linear-gradient(145deg, #091510 0%, #06110d 55%, #0b1e18 100%);
+    }
+
+    .grain {
+      pointer-events: none;
+      position: absolute;
+      z-index: 4;
+      inset: 0;
+      opacity: .18;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.3'/%3E%3C/svg%3E");
+      mix-blend-mode: soft-light;
+    }
+
+    .aurora {
+      position: absolute;
+      width: 72vw;
+      max-width: 760px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      right: -24vw;
+      top: 8%;
+      z-index: -1;
+      filter: blur(34px);
+      opacity: .52;
+      background: radial-gradient(circle at 32% 35%, rgba(200, 255, 88, .38), rgba(57, 170, 119, .13) 35%, transparent 68%);
+      animation: drift 9s ease-in-out infinite alternate;
+    }
+
+    @keyframes drift {
+      to { transform: translate(-7%, 7%) scale(1.1); }
+    }
+
+    .topbar {
+      position: absolute;
+      z-index: 15;
+      top: max(18px, env(safe-area-inset-top));
+      left: 22px;
+      right: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: -.04em;
+      font-size: 18px;
+      font-weight: 750;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 29px;
+      height: 29px;
+      color: #10200a;
+      border-radius: 9px;
+      background: var(--lime);
+      box-shadow: 0 5px 22px rgba(199, 255, 88, .35);
+    }
+
+    .ios-chip {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 10px;
+      color: #cde0d4;
+      border: 1px solid var(--line);
+      border-radius: 99px;
+      background: rgba(7, 17, 14, .45);
+      backdrop-filter: blur(12px);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .ios-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--lime);
+      box-shadow: 0 0 0 4px rgba(199, 255, 88, .12);
+    }
+
+    .scene {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .surface-grid {
+      position: absolute;
+      width: 150%;
+      height: 62%;
+      left: -25%;
+      bottom: -25%;
+      opacity: .24;
+      transform: perspective(500px) rotateX(67deg);
+      transform-origin: bottom;
+      background-image:
+        linear-gradient(rgba(184, 255, 193, .16) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(184, 255, 193, .16) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: linear-gradient(to bottom, transparent, black 32%, black);
+      -webkit-mask-image: linear-gradient(to bottom, transparent, black 32%, black);
+    }
+
+    .scanner {
+      position: absolute;
+      width: min(77vw, 380px);
+      aspect-ratio: 1;
+      top: 16%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 1px solid rgba(212, 255, 180, .17);
+      border-radius: 50%;
+      box-shadow: inset 0 0 80px rgba(151, 255, 90, .06), 0 0 90px rgba(128, 255, 122, .05);
+    }
+
+    .scanner::before, .scanner::after {
+      content: "";
+      position: absolute;
+      inset: 13%;
+      border: 1px dashed rgba(200, 255, 136, .17);
+      border-radius: 50%;
+    }
+
+    .scanner::after {
+      inset: -1px;
+      border: 0;
+      border-top: 1px solid rgba(205, 255, 128, .72);
+      filter: drop-shadow(0 0 6px rgba(205, 255, 128, .8));
+      animation: scan 3.5s linear infinite;
+    }
+
+    @keyframes scan {
+      to { transform: rotate(360deg); }
+    }
+
+    .preview-wrap {
+      position: absolute;
+      z-index: 2;
+      top: 11%;
+      left: 50%;
+      width: min(76vw, 360px);
+      height: min(51vh, 440px);
+      transform: translateX(-50%);
+      filter: drop-shadow(0 35px 40px rgba(0, 0, 0, .5));
+      animation: floaty 4.8s ease-in-out infinite;
+    }
+
+    @keyframes floaty {
+      50% { transform: translateX(-50%) translateY(-10px); }
+    }
+
+    model-viewer {
+      width: 100%;
+      height: 100%;
+      --poster-color: transparent;
+      --progress-bar-color: var(--lime);
+      --progress-mask: transparent;
+      background: transparent;
+      pointer-events: none;
+    }
+
+    .ground-glow {
+      position: absolute;
+      z-index: 1;
+      top: calc(11% + min(51vh, 440px) - 68px);
+      left: 50%;
+      width: min(62vw, 270px);
+      height: 62px;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(194, 255, 88, .47), rgba(115, 229, 100, .14) 37%, transparent 68%);
+      filter: blur(9px);
+      opacity: .82;
+      animation: pulse 3.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      50% { opacity: .45; transform: translateX(-50%) scale(.86); }
+    }
+
+    .status {
+      position: absolute;
+      z-index: 5;
+      top: 59%;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: max-content;
+      max-width: 88vw;
+      padding: 9px 12px;
+      border: 1px solid rgba(214, 255, 203, .15);
+      border-radius: 99px;
+      background: rgba(5, 17, 12, .58);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, .16);
+      backdrop-filter: blur(12px);
+      color: #d8eadc;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status .pulse {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--lime);
+      box-shadow: 0 0 0 0 rgba(199, 255, 88, .55);
+      animation: beacon 1.6s infinite;
+    }
+
+    @keyframes beacon {
+      70% { box-shadow: 0 0 0 7px rgba(199, 255, 88, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(199, 255, 88, 0); }
+    }
+
+    .bottom-sheet {
+      position: absolute;
+      z-index: 10;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 22px 20px calc(19px + env(safe-area-inset-bottom));
+      border-top: 1px solid rgba(218, 255, 221, .1);
+      border-radius: 28px 28px 0 0;
+      background: linear-gradient(180deg, rgba(14, 35, 28, .78), rgba(5, 16, 12, .96));
+      box-shadow: 0 -20px 50px rgba(0, 0, 0, .18);
+      backdrop-filter: blur(20px);
+    }
+
+    .sheet-handle {
+      width: 36px;
+      height: 4px;
+      margin: -11px auto 18px;
+      border-radius: 99px;
+      background: rgba(223, 255, 230, .23);
+    }
+
+    .eyebrow {
+      margin: 0 0 7px;
+      color: var(--lime);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(27px, 7.2vw, 36px);
+      line-height: 1.05;
+      letter-spacing: -.055em;
+    }
+
+    .subtitle {
+      margin: 9px 0 18px;
+      max-width: 480px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .music-row {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      margin-bottom: 17px;
+    }
+
+    .music-label {
+      flex: 0 0 auto;
+      color: #a9c0b0;
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .tracks {
+      display: flex;
+      flex: 1;
+      gap: 7px;
+    }
+
+    .track {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 36px;
+      padding: 7px 10px;
+      color: #b9cec0;
+      border: 1px solid rgba(219, 255, 224, .12);
+      border-radius: 11px;
+      background: rgba(255, 255, 255, .035);
+      font-size: 12px;
+      font-weight: 700;
+      transition: .22s ease;
+    }
+
+    .track.active {
+      color: #13210e;
+      border-color: var(--lime);
+      background: var(--lime);
+      box-shadow: 0 7px 20px rgba(181, 255, 74, .16);
+    }
+
+    .equalizer {
+      display: inline-flex;
+      align-items: end;
+      gap: 2px;
+      width: 11px;
+      height: 13px;
+    }
+
+    .equalizer i {
+      display: block;
+      width: 2px;
+      height: 5px;
+      border-radius: 2px;
+      background: currentColor;
+    }
+
+    .active .equalizer i {
+      animation: equalize .55s ease-in-out infinite alternate;
+    }
+
+    .active .equalizer i:nth-child(2) { animation-delay: -.24s; }
+    .active .equalizer i:nth-child(3) { animation-delay: -.41s; }
+
+    @keyframes equalize {
+      to { height: 13px; }
+    }
+
+    .launch-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 11px;
+      width: 100%;
+      min-height: 57px;
+      border-radius: 16px;
+      color: #10200b;
+      background: linear-gradient(135deg, #d9ff77, #b9f84c);
+      box-shadow: 0 15px 27px rgba(161, 242, 52, .19), inset 0 1px rgba(255,255,255,.46);
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+
+    .launch-button:active {
+      transform: scale(.975);
+      box-shadow: 0 7px 16px rgba(161, 242, 52, .14);
+    }
+
+    .launch-button svg { width: 21px; height: 21px; }
+
+    .fine-print {
+      display: flex;
+      justify-content: center;
+      gap: 7px;
+      margin: 12px 0 0;
+      color: #719080;
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .fine-print svg { width: 13px; height: 13px; flex: 0 0 auto; }
+
+    .notice {
+      position: absolute;
+      z-index: 30;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+      background: rgba(3, 12, 9, .88);
+      backdrop-filter: blur(18px);
+      text-align: center;
+    }
+
+    .notice.show { display: flex; }
+
+    .notice-card {
+      max-width: 340px;
+      padding: 30px 24px;
+      border: 1px solid rgba(220, 255, 230, .12);
+      border-radius: 24px;
+      background: #10261d;
+      box-shadow: var(--shadow);
+    }
+
+    .notice-icon {
+      display: grid;
+      place-items: center;
+      width: 51px;
+      height: 51px;
+      margin: 0 auto 16px;
+      border-radius: 16px;
+      color: var(--lime);
+      background: rgba(199, 255, 88, .12);
+    }
+
+    .notice h2 { margin: 0 0 8px; font-size: 22px; letter-spacing: -.04em; }
+    .notice p { margin: 0; color: #b4c9bb; font-size: 14px; line-height: 1.5; }
+    .notice button {
+      margin-top: 21px;
+      min-height: 43px;
+      padding: 0 20px;
+      border-radius: 12px;
+      color: #10200b;
+      background: var(--lime);
+      font-weight: 800;
+    }
+
+    @media (min-width: 700px) {
+      .app { max-width: 560px; margin: auto; box-shadow: 0 0 0 1px rgba(255,255,255,.05), 0 30px 100px rgba(0,0,0,.5); }
+      body { background: #020705; }
+      .bottom-sheet { padding-left: 28px; padding-right: 28px; }
+    }
+
+    @media (max-height: 700px) {
+      .preview-wrap { top: 9%; height: 39vh; }
+      .ground-glow { top: calc(9% + 39vh - 50px); }
+      .status { top: 51%; }
+      .bottom-sheet { padding-top: 16px; }
+      .subtitle { margin-bottom: 12px; }
+      .music-row { margin-bottom: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="aurora"></div>
+    <div class="grain"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v18M3 12h18"></path>
+          </svg>
+        </span>
+        surface.
+      </div>
+      <div class="ios-chip"><span class="ios-dot"></span> iOS AR</div>
+    </header>
+
+    <section class="scene" aria-label="AR model preview">
+      <div class="surface-grid"></div>
+      <div class="scanner"></div>
+      <div class="ground-glow"></div>
+
+      <div class="preview-wrap">
+        <model-viewer
+          id="arModel"
+          src="https://modelviewer.dev/shared-assets/models/RobotExpressive.glb"
+          alt="Animated AR companion"
+          ar
+          ar-modes="webxr quick-look"
+          ar-placement="floor"
+          camera-controls
+          auto-rotate
+          autoplay
+          animation-name="Walking"
+          interaction-prompt="none"
+          shadow-intensity="1"
+          environment-image="neutral"
+          exposure="1.1"
+          loading="eager">
+        </model-viewer>
+      </div>
+
+      <div class="status" id="trackingStatus">
+        <span class="pulse"></span>
+        <span>One model ready to place</span>
+      </div>
+    </section>
+
+    <section class="bottom-sheet">
+      <div class="sheet-handle"></div>
+      <p class="eyebrow">Surface experience / 01</p>
+      <h1>Bring your space to life.</h1>
+      <p class="subtitle">Find an open floor or table, then place your animated companion with your rear camera.</p>
+
+      <div class="music-row" aria-label="Background music selection">
+        <span class="music-label">Sound</span>
+        <div class="tracks">
+          <button class="track active" type="button" data-track="orbit" aria-pressed="true">
+            <span class="equalizer" aria-hidden="true"><i></i><i></i><i></i></span>
+            Orbit
+          </button>
+          <button class="track" type="button" data-track="bloom" aria-pressed="false">
+            <span class="equalizer" aria-hidden="true"><i></i><i></i><i></i></span>
+            Bloom
+          </button>
+        </div>
+      </div>
+
+      <button class="launch-button" id="launchAR" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"></path>
+          <circle cx="12" cy="12" r="3.5"></circle>
+        </svg>
+        Open rear camera
+      </button>
+
+      <p class="fine-print">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2" width="14" height="20" rx="2"></rect><path d="M9 5h6M11 18h2"></path></svg>
+        Built exclusively for iPhone and iPad
+      </p>
+    </section>
+
+    <aside class="notice" id="iosNotice" role="dialog" aria-modal="true" aria-labelledby="noticeTitle">
+      <div class="notice-card">
+        <div class="notice-icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="2"></rect>
+            <path d="M9 5h6M9 18h6"></path>
+          </svg>
+        </div>
+        <h2 id="noticeTitle">Designed for iOS</h2>
+        <p>Surface uses Apple’s augmented-reality tools and the rear camera. Please open this experience in Safari on an iPhone or iPad.</p>
+        <button type="button" id="closeNotice">Got it</button>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const model = document.getElementById('arModel');
+    const launchButton = document.getElementById('launchAR');
+    const statusText = document.querySelector('#trackingStatus span:last-child');
+    const iosNotice = document.getElementById('iosNotice');
+    const closeNotice = document.getElementById('closeNotice');
+    const trackButtons = [...document.querySelectorAll('.track')];
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    let audioContext;
+    let musicTimer;
+    let selectedTrack = 'orbit';
+    let nextNoteTime = 0;
+    let step = 0;
+
+    function getAudioContext() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return audioContext;
+    }
+
+    function tone(ctx, frequency, start, duration, type, volume) {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(volume, start + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      oscillator.connect(gain).connect(ctx.destination);
+      oscillator.start(start);
+      oscillator.stop(start + duration + 0.04);
+    }
+
+    function playMusicStep() {
+      const ctx = getAudioContext();
+      const orbit = [220, 277.18, 329.63, 277.18, 246.94, 329.63, 369.99, 329.63];
+      const bloom = [261.63, 329.63, 392, 523.25, 440, 392, 329.63, 293.66];
+      const notes = selectedTrack === 'orbit' ? orbit : bloom;
+      const current = ctx.currentTime;
+
+      while (nextNoteTime < current + 0.16) {
+        const note = notes[step % notes.length];
+        if (selectedTrack === 'orbit') {
+          tone(ctx, note / 2, nextNoteTime, .36, 'sine', .025);
+          tone(ctx, note, nextNoteTime, .17, 'triangle', .016);
+          if (step % 2 === 0) tone(ctx, note * 2, nextNoteTime + .08, .08, 'sine', .008);
+        } else {
+          tone(ctx, note / 2, nextNoteTime, .5, 'sine', .023);
+          tone(ctx, note, nextNoteTime, .31, 'triangle', .014);
+          if (step % 4 === 0) tone(ctx, note * 1.5, nextNoteTime + .11, .2, 'sine', .009);
+        }
+        nextNoteTime += selectedTrack === 'orbit' ? .34 : .39;
+        step++;
+      }
+    }
+
+    function startMusic() {
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') ctx.resume();
+      if (!musicTimer) {
+        nextNoteTime = ctx.currentTime + 0.05;
+        playMusicStep();
+        musicTimer = setInterval(playMusicStep, 100);
+      }
+    }
+
+    trackButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        selectedTrack = button.dataset.track;
+        trackButtons.forEach(item => {
+          const active = item === button;
+          item.classList.toggle('active', active);
+          item.setAttribute('aria-pressed', active);
+        });
+        step = 0;
+        nextNoteTime = getAudioContext().currentTime + .04;
+        startMusic();
+      });
+    });
+
+    launchButton.addEventListener('click', async () => {
+      if (!isIOS) {
+        iosNotice.classList.add('show');
+        return;
+      }
+
+      startMusic();
+      launchButton.innerHTML = 'Preparing AR…';
+      launchButton.disabled = true;
+      statusText.textContent = 'Opening camera…';
+
+      try {
+        await model.activateAR();
+      } catch (error) {
+        statusText.textContent = 'AR needs Safari camera access';
+        launchButton.innerHTML = 'Try rear camera again';
+        launchButton.disabled = false;
+      }
+
+      setTimeout(() => {
+        if (launchButton.disabled) {
+          launchButton.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"></path><circle cx="12" cy="12" r="3.5"></circle>
+            </svg> Open rear camera`;
+          launchButton.disabled = false;
+        }
+      }, 2800);
+    });
+
+    model.addEventListener('ar-status', event => {
+      if (event.detail.status === 'session-started') {
+        statusText.textContent = 'Move slowly to find a surface';
+      } else if (event.detail.status === 'not-presenting') {
+        statusText.textContent = 'One model ready to place';
+      } else if (event.detail.status === 'failed') {
+        statusText.textContent = 'AR is unavailable in this browser';
+      }
+    });
+
+    closeNotice.addEventListener('click', () => iosNotice.classList.remove('show'));
+
+    if (!isIOS) {
+      setTimeout(() => iosNotice.classList.add('show'), 550);
+    }
+  </script>
+</body>
+</html>
